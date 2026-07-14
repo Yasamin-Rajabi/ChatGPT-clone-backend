@@ -5,6 +5,9 @@ from datetime import timedelta
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-mock-key-for-web-programming-homework'
+STATIC_URL = 'static/'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEBUG = True
 ALLOWED_HOSTS = []
 
@@ -74,7 +77,7 @@ REST_FRAMEWORK = {
     ],
     # این بخش باید اضافه یا اصلاح شود تا مقدار سقف روزانه مشخص باشد:
     'DEFAULT_THROTTLE_RATES': {
-        'free_user_tier': '50/day',  # سقف ۵۰ پیام در روز برای کاربران رایگان
+        'free_user_tier': '3/min',  # ۳ پیام در دقیقه برای تست سریع
     }
 }
 

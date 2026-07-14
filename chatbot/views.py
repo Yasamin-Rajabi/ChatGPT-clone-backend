@@ -12,6 +12,8 @@ from .serializers import (
 from .permissions import IsOwnerOnly, IsAssistantOwnerOrPublic, IsSuperuserOrReadOnly
 from .throttles import SubscriptionRateThrottle
 
+from drf_spectacular.utils import extend_schema_view, extend_schema, inline_serializer
+from rest_framework import serializers
 # --- بخش احراز هویت و مدیریت اکانت ---
 
 class RegisterView(generics.CreateAPIView):
@@ -30,10 +32,32 @@ class ProfileView(generics.RetrieveUpdateAPIView):
 class LinkAccountView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        request=inline_serializer(
+            name='LinkAccountRequest',
+            fields={
+                'username': serializers.CharField(),
+                'password': serializers.CharField()
+            }
+        ),
+        responses={200: inline_serializer(
+            name='LinkAccountResponse',
+            fields={'detail': serializers.CharField()}
+        )}
+    )
+
     def post(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
+        
+        if not username or not password:
+            return Response({"error": "Username and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+            
         target_user = get_object_or_404(User, username=username)
+        
+        # جلوگیری از لینک کردن اکانت خود به خود!
+        if target_user == request.user:
+            return Response({"error": "You cannot link your account to itself."}, status=status.HTTP_400_BAD_REQUEST)
         
         if target_user.check_password(password):
             request.user.linked_accounts.add(target_user)
@@ -49,6 +73,21 @@ class ListLinkedAccountsView(generics.ListAPIView):
 
 class SwitchAccountView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        request=inline_serializer(
+            name='SwitchAccountRequest',
+            fields={'user_id': serializers.IntegerField()}
+        ),
+        responses={200: inline_serializer(
+            name='SwitchAccountResponse',
+            fields={
+                'refresh': serializers.CharField(),
+                'access': serializers.CharField(),
+                'user': serializers.CharField()
+            }
+        )}
+    )
 
     def post(self, request):
         target_user_id = request.data.get('user_id')
@@ -69,6 +108,16 @@ class SwitchAccountView(APIView):
 class SubscriptionStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        responses={200: inline_serializer(
+            name='SubscriptionStatusResponse',
+            fields={
+                'subscription_type': serializers.CharField(),
+                'daily_quota_remaining': serializers.CharField()
+            }
+        )}
+    )
+
     def get(self, request):
         # شبیه‌سازی اطلاعات سهمیه
         tier = request.user.subscription_type
@@ -81,6 +130,18 @@ class SubscriptionStatusView(APIView):
 class SubscriptionPlansView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        responses={200: inline_serializer(
+            name='SubscriptionPlansResponse',
+            many=True,
+            fields={
+                'plan_name': serializers.CharField(),
+                'price': serializers.CharField(),
+                'features': serializers.CharField()
+            }
+        )}
+    )
+
     def get(self, request):
         return Response([
             {"plan_name": "Free Tier", "price": "0$ / month", "features": "Access to GPT-3.5, 50 messages/day"},
@@ -89,6 +150,14 @@ class SubscriptionPlansView(APIView):
 
 class PurchaseSubscriptionView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        request=None, 
+        responses={200: inline_serializer(
+            name='PurchaseSubscriptionResponse',
+            fields={'detail': serializers.CharField()}
+        )}
+    )
 
     def post(self, request):
         user = request.user
@@ -170,6 +239,27 @@ class ProjectConversationsListView(generics.ListAPIView):
         return Conversation.objects.filter(project=project)
 
 
+@extend_schema_view(
+    post=extend_schema(
+        request={
+            'application/json': inline_serializer(
+                name='MessageJsonRequest',
+                fields={
+                    'text': serializers.CharField()
+                }
+            ),
+            'multipart/form-data': inline_serializer(
+                name='MessageUploadRequest',
+                fields={
+                    'text': serializers.CharField(),
+                    # تغییر این خط برای مجبور کردن اسواگر به نمایش دکمه انتخاب فایل
+                    'file': serializers.FileField(required=False, use_url=False)
+                }
+            )
+        }
+    )
+)
+
 class MessageListCreateView(generics.ListCreateAPIView):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -179,7 +269,7 @@ class MessageListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         conversation_id = self.kwargs['conversation_id']
         conversation = get_object_or_404(Conversation, id=conversation_id, user=self.request.user)
-        return Message.objects.filter(conversation=conversation).order_range('sent_at')
+        return Message.objects.filter(conversation=conversation).order_by('sent_at')
 
     def perform_create(self, serializer):
         conversation_id = self.kwargs['conversation_id']
@@ -215,6 +305,19 @@ class MessageListCreateView(generics.ListCreateAPIView):
 
 class MessageAttachmentsListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        responses={200: inline_serializer(
+            name='MessageAttachmentsResponse',
+            many=True,
+            fields={
+                'id': serializers.IntegerField(),
+                'file_url': serializers.CharField(),
+                'format': serializers.CharField(),
+                'size': serializers.IntegerField()
+            }
+        )}
+    )
 
     def get(self, request, message_id):
         message = get_object_or_404(Message, id=message_id, conversation__user=request.user)

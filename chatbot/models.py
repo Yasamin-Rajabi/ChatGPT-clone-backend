@@ -22,6 +22,9 @@ class Project(models.Model):
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='projects')
+    
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.title
@@ -30,6 +33,9 @@ class AIModel(models.Model):
     name = models.CharField(max_length=100, unique=True)
     provider = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['id']
 
     def __str__(self):
         return self.name
@@ -41,6 +47,9 @@ class Assistant(models.Model):
     is_public = models.BooleanField(default=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='assistants', blank=True, null=True)
 
+    class Meta:
+        ordering = ['id']
+        
     def __str__(self):
         return self.title
 
@@ -54,6 +63,9 @@ class Conversation(models.Model):
         ACTIVE = 'ACTIVE', 'Active'
         ARCHIVED = 'ARCHIVED', 'Archived'
         DELETED = 'DELETED', 'Deleted'
+
+    class Meta:
+        ordering = ['-created_at']
 
     title = models.CharField(max_length=255, blank=True, default="New Conversation")
     created_at = models.DateTimeField(auto_now_add=True)

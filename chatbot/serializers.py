@@ -57,14 +57,33 @@ class AttachmentSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     attachments = AttachmentSerializer(many=True, read_only=True)
+    sender_role = serializers.CharField(read_only=True)
+    sent_at = serializers.DateTimeField(read_only=True)
+    
+    # تعریف صریح فیلد به عنوان فایل آپلود شونده
+    file = serializers.FileField(required=False, write_only=True, allow_empty_file=False)
 
     class Meta:
         model = Message
-        fields = '__all__'
-        read_only_fields = ['sender_role', 'conversation']
+        fields = ['id', 'sender_role', 'text', 'sent_at', 'attachments', 'file']
+        read_only_fields = ['id', 'sender_role', 'sent_at', 'attachments']
 
     def validate_conversation(self, value):
-        # Cross-Reference Validation
+        # بررسی دسترسی کاربر به مکالمه
         if value.user != self.context['request'].user:
             raise serializers.ValidationError("You do not have access to this conversation.")
         return value
+
+    # def create(self, validated_data):
+    #     file = validated_data.pop('file', None)
+    #     message = super().create(validated_data)
+        
+    #     if file and self.context['request'].user.subscription_type == 'PREMIUM':
+    #         from chatbot.models import MessageAttachment
+    #         MessageAttachment.objects.create(
+    #             message=message,
+    #             file=file,
+    #             file_format=file.name.split('.')[-1] if '.' in file.name else 'unknown',
+    #             file_size=file.size
+    #         )
+    #     return message
