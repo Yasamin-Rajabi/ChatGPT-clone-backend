@@ -36,8 +36,8 @@ class LinkAccountView(APIView):
         request=inline_serializer(
             name='LinkAccountRequest',
             fields={
-                'username': serializers.CharField(),
-                'password': serializers.CharField()
+                'username': serializers.CharField(default='ali'),
+                'password': serializers.CharField(default='ali123')
             }
         ),
         responses={200: inline_serializer(
@@ -77,7 +77,7 @@ class SwitchAccountView(APIView):
     @extend_schema(
         request=inline_serializer(
             name='SwitchAccountRequest',
-            fields={'user_id': serializers.IntegerField()}
+            fields={'user_id': serializers.IntegerField(default=2)}
         ),
         responses={200: inline_serializer(
             name='SwitchAccountResponse',
@@ -178,7 +178,7 @@ class AssistantViewSet(viewsets.ModelViewSet):
     serializer_class = AssistantSerializer
     permission_classes = [permissions.IsAuthenticated, IsAssistantOwnerOrPublic]
     lookup_value_regex = r'[0-9]+'
-    
+
     def get_queryset(self):
         # نمایش دستیارهای عمومی + دستیارهای اختصاصی خود کاربر
         return Assistant.objects.filter(is_public=True) | Assistant.objects.filter(user=self.request.user)

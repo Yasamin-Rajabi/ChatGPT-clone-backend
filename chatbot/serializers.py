@@ -40,6 +40,10 @@ class AssistantSerializer(serializers.ModelSerializer):
         read_only_fields = ['user']
 
 class ConversationSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(default="Debug Python Codes", required=False)
+    ai_model = serializers.IntegerField(default=1, help_text="ID of the AI Model")
+    project = serializers.IntegerField(default=1, required=False, help_text="ID of the Project")
+
     class Meta:
         model = Conversation
         fields = '__all__'
@@ -61,6 +65,7 @@ class MessageSerializer(serializers.ModelSerializer):
     sent_at = serializers.DateTimeField(read_only=True)
     
     # تعریف صریح فیلد به عنوان فایل آپلود شونده
+    text = serializers.CharField(default="Explain the DFS algorithm in simple terms.")
     file = serializers.FileField(required=False, write_only=True, allow_empty_file=False)
 
     class Meta:
@@ -80,7 +85,7 @@ class MessageSerializer(serializers.ModelSerializer):
         validated_data.pop('file', None)
         return super().create(validated_data)
     
-    
+
     # def create(self, validated_data):
     #     file = validated_data.pop('file', None)
     #     message = super().create(validated_data)
