@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import get_object_or_404
-
+from django.db import transaction
 from .models import User, Project, AIModel, Assistant, Conversation, Message, Attachment
 from .serializers import (
     UserRegisterSerializer, UserProfileSerializer, ProjectSerializer,
@@ -177,7 +177,8 @@ class AIModelViewSet(viewsets.ModelViewSet):
 class AssistantViewSet(viewsets.ModelViewSet):
     serializer_class = AssistantSerializer
     permission_classes = [permissions.IsAuthenticated, IsAssistantOwnerOrPublic]
-
+    lookup_value_regex = r'[0-9]+'
+    
     def get_queryset(self):
         # نمایش دستیارهای عمومی + دستیارهای اختصاصی خود کاربر
         return Assistant.objects.filter(is_public=True) | Assistant.objects.filter(user=self.request.user)
@@ -191,6 +192,7 @@ class AssistantViewSet(viewsets.ModelViewSet):
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerOnly]
+    lookup_value_regex = r'[0-9]+'
 
     def get_queryset(self):
         return Project.objects.filter(user=self.request.user)
@@ -208,6 +210,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 class ConversationViewSet(viewsets.ModelViewSet):
     serializer_class = ConversationSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerOnly]
+    lookup_value_regex = r'[0-9]+'
 
     def get_queryset(self):
         return Conversation.objects.filter(user=self.request.user)
@@ -248,14 +251,17 @@ class ProjectConversationsListView(generics.ListAPIView):
                     'text': serializers.CharField()
                 }
             ),
-            'multipart/form-data': inline_serializer(
-                name='MessageUploadRequest',
-                fields={
-                    'text': serializers.CharField(),
-                    # تغییر این خط برای مجبور کردن اسواگر به نمایش دکمه انتخاب فایل
-                    'file': serializers.FileField(required=False, use_url=False)
-                }
-            )
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'text': {'type': 'string'},
+                    'file': {
+                        'type': 'string',
+                        'format': 'binary',
+                    },
+                },
+                'required': ['text'],
+            }
         }
     )
 )
@@ -274,33 +280,32 @@ class MessageListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         conversation_id = self.kwargs['conversation_id']
         conversation = get_object_or_404(Conversation, id=conversation_id, user=self.request.user)
-        
-        # ذخیره پیام کاربر
-        user_message = serializer.save(sender_role=Message.Role.USER, conversation=conversation)
 
-        # مدیریت آپلود فایلهای پیوست در صورت وجود فیلد file
-        if 'file' in self.request.FILES:
-            if self.request.user.subscription_type != User.SubscriptionType.PREMIUM:
-                from rest_framework.exceptions import ValidationError
-                raise ValidationError("File attachment upload is restricted to Premium users.")
-            uploaded_file = self.request.FILES['file']
-            Attachment.objects.create(
-                message=user_message,
-                file=uploaded_file,
-                file_format=uploaded_file.name.split('.')[-1],
-                file_size=uploaded_file.size
+        uploaded_file = self.request.FILES.get('file')
+        if uploaded_file and self.request.user.subscription_type != User.SubscriptionType.PREMIUM:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("File attachment upload is restricted to Premium users.")
+
+        with transaction.atomic():
+            user_message = serializer.save(sender_role=Message.Role.USER, conversation=conversation)
+
+            if uploaded_file:
+                Attachment.objects.create(
+                    message=user_message,
+                    file=uploaded_file,
+                    file_format=uploaded_file.name.split('.')[-1] if '.' in uploaded_file.name else 'unknown',
+                    file_size=uploaded_file.size
+                )
+
+            mock_text = f"This is a mocked response from model '{conversation.ai_model.name}'"
+            if conversation.assistant:
+                mock_text += f" acting as assistant: '{conversation.assistant.title}'."
+
+            Message.objects.create(
+                conversation=conversation,
+                text=mock_text,
+                sender_role=Message.Role.ASSISTANT
             )
-
-        # تولید پاسخ هوش مصنوعی به صورت پیش‌فرض Mock بر اساس مدل انتخابی چت
-        mock_text = f"This is a mocked response from model '{conversation.ai_model.name}'"
-        if conversation.assistant:
-            mock_text += f" acting as assistant: '{conversation.assistant.title}'."
-        
-        Message.objects.create(
-            conversation=conversation,
-            text=mock_text,
-            sender_role=Message.Role.ASSISTANT
-        )
 
 
 class MessageAttachmentsListView(APIView):

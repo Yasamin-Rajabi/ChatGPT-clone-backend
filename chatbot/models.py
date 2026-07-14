@@ -14,6 +14,9 @@ class User(AbstractUser):
     )
     linked_accounts = models.ManyToManyField('self', blank=True, symmetrical=True)
 
+    class Meta:
+        ordering = ['id']
+        
     def __str__(self):
         return self.username
 

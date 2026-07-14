@@ -73,7 +73,14 @@ class MessageSerializer(serializers.ModelSerializer):
         if value.user != self.context['request'].user:
             raise serializers.ValidationError("You do not have access to this conversation.")
         return value
-
+    
+    def create(self, validated_data):
+        # فیلد file فقط جهت دریافت ورودی از کلاینت است؛
+        # ذخیره واقعی Attachment در MessageListCreateView.perform_create انجام می‌شود
+        validated_data.pop('file', None)
+        return super().create(validated_data)
+    
+    
     # def create(self, validated_data):
     #     file = validated_data.pop('file', None)
     #     message = super().create(validated_data)
