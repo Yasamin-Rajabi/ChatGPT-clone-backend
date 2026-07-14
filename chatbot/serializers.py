@@ -41,8 +41,17 @@ class AssistantSerializer(serializers.ModelSerializer):
 
 class ConversationSerializer(serializers.ModelSerializer):
     title = serializers.CharField(default="Debug Python Codes", required=False)
-    ai_model = serializers.IntegerField(default=1, help_text="ID of the AI Model")
-    project = serializers.IntegerField(default=1, required=False, help_text="ID of the Project")
+    ai_model = serializers.PrimaryKeyRelatedField(
+        queryset=AIModel.objects.all(), 
+        default=1, 
+        help_text="ID of the AI Model"
+    )
+    project = serializers.PrimaryKeyRelatedField(
+        queryset=Project.objects.all(), 
+        default=1, 
+        required=False, 
+        help_text="ID of the Project"
+    )
 
     class Meta:
         model = Conversation
